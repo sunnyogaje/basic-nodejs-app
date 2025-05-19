@@ -1,14 +1,28 @@
-const http = require('http');
+const express = require('express');
+const bodyParser = require('body-parser');
+require('dotenv').config();
+const sendUSDT = require('./send-usdt');
 
-const hostname = '0.0.0.0'; // Listen on all interfaces
-const port = process.env.PORT || 3000;
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-const server = http.createServer((req, res) => {
-  res.statusCode = 200;
-  res.setHeader('Content-Type', 'text/plain');
-  res.end('Hello from your live Node.js app!\n');
+app.use(bodyParser.json());
+
+app.post('/send-usdt', async (req, res) => {
+  const { recipient, amount } = req.body;
+
+  if (!recipient || !amount) {
+    return res.status(400).json({ message: 'Missing recipient or amount' });
+  }
+
+  try {
+    const txHash = await sendUSDT(recipient, amount);
+    res.json({ message: 'Success', txHash });
+  } catch (err) {
+    res.status(500).json({ message: 'Transaction failed', error: err.message });
+  }
 });
 
-server.listen(port, hostname, () => {
-  console.log(`Server running at http://${hostname}:${port}/`);
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
