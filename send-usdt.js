@@ -1,54 +1,31 @@
-const Web3 = require('web3');
 require('dotenv').config();
+const { ethers } = require('ethers');
 
-const web3 = new Web3(new Web3.providers.HttpProvider(process.env.RPC_URL));
-const privateKey = process.env.PRIVATE_KEY;
-const tokenAddress = process.env.TOKEN_ADDRESS;
-const walletAddress = web3.eth.accounts.privateKeyToAccount(privateKey).address;
-
-const minABI = [
-  // balanceOf
-  {
-    constant: true,
-    inputs: [{ name: "_owner", type: "address" }],
-    name: "balanceOf",
-    outputs: [{ name: "balance", type: "uint256" }],
-    type: "function"
-  },
-  // transfer
-  {
-    constant: false,
-    inputs: [
-      { name: "_to", type: "address" },
-      { name: "_value", type: "uint256" }
-    ],
-    name: "transfer",
-    outputs: [{ name: "success", type: "bool" }],
-    type: "function"
-  }
-];
-
-const tokenContract = new web3.eth.Contract(minABI, tokenAddress);
-
-async function sendUSDT(to, amount) {
+const sendUSDT = async (recipient, amount) => {
   try {
-    const decimals = 18;
-    const value = web3.utils.toBN(amount).mul(web3.utils.toBN(10).pow(web3.utils.toBN(decimals)));
+    const provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
+    const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
 
-    const tx = {
-      from: walletAddress,
-      to: tokenAddress,
-      gas: 100000,
-      data: tokenContract.methods.transfer(to, value).encodeABI()
-    };
+    const tokenAddress = '0x55d398326f99059fF775485246999027B3197955'; // BEP-20 USDT (BSC)
+    const tokenAbi = [
+      "function transfer(address to, uint amount) returns (bool)",
+      "function decimals() view returns (uint8)"
+    ];
 
-    const signedTx = await web3.eth.accounts.signTransaction(tx, privateKey);
-    const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
-    return receipt.transactionHash;
-  } catch (err) {
-    console.error("Error:", err);
-    throw err;
+    const contract = new ethers.Contract(tokenAddress, tokenAbi, wallet);
+    const decimals = await contract.decimals();
+    const parsedAmount = ethers.parseUnits(amount.toString(), decimals);
+
+    const tx = await contract.transfer(recipient, parsedAmount);
+    await tx.wait();
+
+    console.log(`✅ USDT sent! Tx hash: ${tx.hash}`);
+    return { success: true, txHash: tx.hash };
+
+  } catch (error) {
+    console.error('❌ Error sending USDT:', error);
+    return { success: false, error: error.message };
   }
-}
+};
 
 module.exports = sendUSDT;
